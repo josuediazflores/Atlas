@@ -1,0 +1,126 @@
+{
+  "id": "s4",
+  "studyId": "pricing-study",
+  "participant": {
+    "id": "P4",
+    "role": "Product Manager",
+    "segment": "Enterprise"
+  },
+  "durationSec": 1980,
+  "transcript": [
+    {
+      "line": 1,
+      "t": "00:00:12",
+      "speaker": "Moderator",
+      "text": "Thanks for making the time. To start, tell me about your work."
+    },
+    {
+      "line": 2,
+      "t": "00:01:39",
+      "speaker": "P4",
+      "text": "I'm a product manager on a enterprise team."
+    },
+    {
+      "line": 3,
+      "t": "00:03:23",
+      "speaker": "Moderator",
+      "text": "How much do you trust the synthesized insights?"
+    },
+    {
+      "line": 4,
+      "t": "00:04:44",
+      "speaker": "P4",
+      "text": "I will not trust an insight unless I can see the source quote and verify it."
+    },
+    {
+      "line": 5,
+      "t": "00:06:22",
+      "speaker": "Moderator",
+      "text": "How did pricing factor into your decision?"
+    },
+    {
+      "line": 6,
+      "t": "00:18:22",
+      "speaker": "P4",
+      "text": "I couldn't tell my manager what this would cost us next quarter, so I stopped recommending it."
+    },
+    {
+      "line": 7,
+      "t": "00:09:09",
+      "speaker": "Moderator",
+      "text": "How do you share results with stakeholders?"
+    },
+    {
+      "line": 8,
+      "t": "00:10:58",
+      "speaker": "P4",
+      "text": "Reporting out is manual — I rebuild the same deck for stakeholders each week."
+    },
+    {
+      "line": 9,
+      "t": "00:12:24",
+      "speaker": "Moderator",
+      "text": "Walk me through getting your team set up."
+    },
+    {
+      "line": 10,
+      "t": "00:14:07",
+      "speaker": "P4",
+      "text": "Setup stalled on permissions — the handoff to whoever could approve access was unclear."
+    },
+    {
+      "line": 11,
+      "t": "00:15:27",
+      "speaker": "Moderator",
+      "text": "That’s really helpful — anything else before we wrap?"
+    },
+    {
+      "line": 12,
+      "t": "00:17:04",
+      "speaker": "P4",
+      "text": "No, I think that covers the main pain points."
+    }
+  ],
+  "themes": [
+    {
+      "key": "data_trust",
+      "label": "Insights need citable sources",
+      "summary": "Teams hesitate to trust a synthesized insight without seeing the source quote and a citation they can verify.",
+      "quotes": [
+        {
+          "line": 4
+        }
+      ]
+    },
+    {
+      "key": "pricing_opacity",
+      "label": "Pricing opacity erodes trust before the first invoice",
+      "summary": "Without a firm number to give finance, the spend could not be pre-approved and the deal slipped a whole quarter.",
+      "quotes": [
+        {
+          "line": 6
+        }
+      ]
+    },
+    {
+      "key": "reporting_export",
+      "label": "Reporting to stakeholders is manual",
+      "summary": "Sharing findings with stakeholders means exporting dashboards into slides and pdf by hand every week.",
+      "quotes": [
+        {
+          "line": 8
+        }
+      ]
+    },
+    {
+      "key": "onboarding_permissions",
+      "label": "Onboarding stalls at the permissions handoff",
+      "summary": "New teams stall at the handoff between inviting teammates and granting the data access that an admin has to approve.",
+      "quotes": [
+        {
+          "line": 10
+        }
+      ]
+    }
+  ]
+}

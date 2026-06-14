@@ -1,0 +1,82 @@
+{
+  "id": "s12",
+  "studyId": "pricing-study",
+  "participant": {
+    "id": "P12",
+    "role": "Researcher",
+    "segment": "Enterprise"
+  },
+  "durationSec": 1620,
+  "transcript": [
+    {
+      "line": 1,
+      "t": "00:00:12",
+      "speaker": "Moderator",
+      "text": "Thanks for making the time. To start, tell me about your work."
+    },
+    {
+      "line": 2,
+      "t": "00:01:39",
+      "speaker": "P12",
+      "text": "I'm a researcher on a enterprise team."
+    },
+    {
+      "line": 3,
+      "t": "00:03:23",
+      "speaker": "Moderator",
+      "text": "How do you find past research in the tool?"
+    },
+    {
+      "line": 4,
+      "t": "00:04:44",
+      "speaker": "P12",
+      "text": "Search is noisy — I filter by tag and date manually to find the right study."
+    },
+    {
+      "line": 5,
+      "t": "00:06:22",
+      "speaker": "Moderator",
+      "text": "How much do you trust the synthesized insights?"
+    },
+    {
+      "line": 6,
+      "t": "00:07:37",
+      "speaker": "P12",
+      "text": "I will not trust an insight unless I can see the source quote and verify it."
+    },
+    {
+      "line": 7,
+      "t": "00:09:09",
+      "speaker": "Moderator",
+      "text": "That’s really helpful — anything else before we wrap?"
+    },
+    {
+      "line": 8,
+      "t": "00:10:58",
+      "speaker": "P12",
+      "text": "No, I think that covers the main pain points."
+    }
+  ],
+  "themes": [
+    {
+      "key": "search_relevance",
+      "label": "Search returns noisy results",
+      "summary": "Finding the right past study or highlight returns noisy results that need manual filtering by tag and date.",
+      "quotes": [
+        {
+          "line": 4
+        }
+      ]
+    },
+    {
+      "key": "data_trust",
+      "label": "Insights need citable sources",
+      "summary": "Teams hesitate to trust a synthesized insight without seeing the source quote and a citation they can verify.",
+      "quotes": [
+        {
+          "line": 6
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "id": "s5",
+  "studyId": "pricing-study",
+  "participant": {
+    "id": "P5",
+    "role": "Researcher",
+    "segment": "Mid-market"
+  },
+  "durationSec": 1680,
+  "transcript": [
+    {
+      "line": 1,
+      "t": "00:00:12",
+      "speaker": "Moderator",
+      "text": "Thanks for making the time. To start, tell me about your work."
+    },
+    {
+      "line": 2,
+      "t": "00:01:39",
+      "speaker": "P5",
+      "text": "I'm a researcher on a mid-market team."
+    },
+    {
+      "line": 3,
+      "t": "00:03:23",
+      "speaker": "Moderator",
+      "text": "How did pricing factor into your decision?"
+    },
+    {
+      "line": 4,
+      "t": "00:04:44",
+      "speaker": "P5",
+      "text": "The pricing was opaque — I genuinely could not forecast the cost for next quarter."
+    },
+    {
+      "line": 5,
+      "t": "00:06:22",
+      "speaker": "Moderator",
+      "text": "How do you find past research in the tool?"
+    },
+    {
+      "line": 6,
+      "t": "00:07:37",
+      "speaker": "P5",
+      "text": "Finding an old highlight returns too many irrelevant results."
+    },
+    {
+      "line": 7,
+      "t": "00:09:09",
+      "speaker": "Moderator",
+      "text": "How was it for new people picking up the tool?"
+    },
+    {
+      "line": 8,
+      "t": "00:10:58",
+      "speaker": "P5",
+      "text": "It is powerful but complex — new researchers need more training and docs to ramp."
+    },
+    {
+      "line": 9,
+      "t": "00:12:24",
+      "speaker": "Moderator",
+      "text": "That’s really helpful — anything else before we wrap?"
+    },
+    {
+      "line": 10,
+      "t": "00:14:07",
+      "speaker": "P5",
+      "text": "No, I think that covers the main pain points."
+    }
+  ],
+  "themes": [
+    {
+      "key": "pricing_opacity",
+      "label": "Pricing opacity erodes trust before the first invoice",
+      "summary": "Buyers cannot predict what the product will cost next quarter, so they stop advocating for it internally with their manager and finance.",
+      "quotes": [
+        {
+          "line": 4
+        }
+      ]
+    },
+    {
+      "key": "search_relevance",
+      "label": "Search returns noisy results",
+      "summary": "Finding the right past study or highlight returns noisy results that need manual filtering by tag and date.",
+      "quotes": [
+        {
+          "line": 6
+        }
+      ]
+    },
+    {
+      "key": "learning_curve",
+      "label": "Powerful but steep to learn",
+      "summary": "New researchers find the tool powerful but complex, and want better training and documentation to ramp up.",
+      "quotes": [
+        {
+          "line": 8,
+          "claim": "The onboarding was impossible and we almost churned in week one."
+        }
+      ]
+    }
+  ]
+}

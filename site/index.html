@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"></meta>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"></meta>
+<title>Atlas — an agent loop that knows when research is done</title>
+<meta name="description" content="Atlas is an engineering prototype: an autonomous research-synthesis loop, built on Great Question's MCP server, that tells research teams exactly when they have interviewed enough people."></meta>
+<link rel="preconnect" href="https://fonts.googleapis.com"></link>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"></link>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"></link>
+<style>
+  :root {
+    --bg: #080605;
+    --bg2: #110c0a;
+    --ink: #efe7d6;
+    --ink-dim: #a89c87;
+    --ink-faint: #6e6453;
+    --gold: oklch(0.8 0.1 85);
+    --gold-dim: oklch(0.62 0.08 85);
+    --hairline: rgba(217, 187, 130, 0.28);
+    --hairline-soft: rgba(217, 187, 130, 0.14);
+    --display: "Cormorant Garamond", serif;
+    --body: "EB Garamond", serif;
+    --mono: "IBM Plex Mono", monospace;
+    --maxw: 1080px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 19px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  ::selection { background: rgba(217, 187, 130, 0.25); }
+  a { color: inherit; }
+
+  /* ---------- reading progress ---------- */
+  .progress {
+    position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+    background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+    z-index: 60; transition: width 0.1s linear;
+  }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 48px;
+    background: linear-gradient(rgba(8,6,5,0.94), rgba(8,6,5,0.74) 70%, transparent);
+    backdrop-filter: blur(7px);
+  }
+  .wordmark {
+    font-family: var(--display); font-weight: 500; font-size: 22px;
+    letter-spacing: 0.34em; color: var(--ink); text-decoration: none;
+    display: inline-flex; align-items: center; gap: 14px;
+  }
+  .wordmark .mk { width: 7px; height: 7px; border: 1px solid var(--gold-dim); transform: rotate(45deg); }
+  .nav-links { display: flex; gap: 26px; }
+  .nav-links a {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-dim); text-decoration: none;
+    transition: color 0.2s; position: relative; padding-bottom: 3px;
+  }
+  .nav-links a::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+    background: var(--gold); transform: scaleX(0); transform-origin: left; transition: transform 0.28s ease;
+  }
+  .nav-links a:hover { color: var(--gold); }
+  .nav-links a.active { color: var(--gold); }
+  .nav-links a.active::after { transform: scaleX(1); }
+
+  /* ---------- right index rail ---------- */
+  .rail {
+    position: fixed; right: 26px; top: 50%; transform: translateY(-50%); z-index: 45;
+    display: flex; flex-direction: column; gap: 18px; align-items: flex-end;
+  }
+  .rail a { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .rail .r-label {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-faint); opacity: 0; transform: translateX(6px); transition: opacity 0.25s, transform 0.25s; white-space: nowrap;
+  }
+  .rail .r-tick { width: 18px; height: 1px; background: var(--ink-faint); transition: width 0.25s, background 0.25s; }
+  .rail a:hover .r-label { opacity: 1; transform: none; }
+  .rail a:hover .r-tick { width: 28px; background: var(--gold-dim); }
+  .rail a.active .r-tick { width: 34px; background: var(--gold); }
+  .rail a.active .r-label { opacity: 1; transform: none; color: var(--gold-dim); }
+
+  /* ---------- hero ---------- */
+  header {
+    min-height: min(100vh, 1080px);
+    display: grid; place-items: center;
+    position: relative; overflow: hidden;
+    text-align: center;
+    padding: 140px 24px 100px;
+  }
+  .hero-art { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+  .hero-art img {
+    width: 700px; max-width: 86vw;
+    mix-blend-mode: screen; opacity: 0.42;
+    filter: sepia(0.55) hue-rotate(-13deg) saturate(1.5) brightness(1.08);
+  }
+  .hero-art::after {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 56% 60% at 50% 44%, transparent 14%, var(--bg) 64%);
+  }
+  .hero-vign { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 240px 60px var(--bg); }
+  .hero-inner { position: relative; display: grid; justify-items: center; gap: 26px; max-width: 900px; }
+  .kicker {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--gold-dim);
+    display: flex; align-items: center; gap: 16px;
+  }
+  .kicker::before, .kicker::after { content: ""; width: 44px; height: 1px; background: var(--hairline); }
+  h1.hero-title {
+    font-family: var(--display); font-weight: 300;
+    font-size: clamp(110px, 17vw, 240px); line-height: 0.92;
+    letter-spacing: 0.22em; text-indent: 0.22em; color: var(--ink);
+  }
+  .hero-sub {
+    font-family: var(--display); font-style: italic; font-weight: 400;
+    font-size: clamp(24px, 2.6vw, 33px); line-height: 1.35; color: var(--ink); max-width: 21em;
+  }
+  .hero-note { font-size: 17.5px; color: var(--ink-dim); max-width: 34em; text-wrap: pretty; }
+  .hero-actions { display: flex; gap: 18px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink); text-decoration: none; border: 1px solid var(--hairline);
+    padding: 15px 30px; transition: border-color 0.25s, color 0.25s, background 0.25s;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .btn:hover { border-color: var(--gold); color: var(--gold); }
+  .btn.primary { background: rgba(217,187,130,0.08); border-color: var(--gold-dim); }
+  .btn .glyph { font-size: 10px; }
+  .scroll-hint {
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.3em;
+    color: var(--ink-faint); text-transform: uppercase; display: grid; justify-items: center; gap: 8px;
+  }
+  .scroll-hint .ln { width: 1px; height: 26px; background: linear-gradient(var(--ink-faint), transparent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .scroll-hint .ln { animation: drip 2.4s ease-in-out infinite; transform-origin: top; }
+    @keyframes drip { 0%,100% { transform: scaleY(0.5); opacity: 0.4; } 50% { transform: scaleY(1); opacity: 1; } }
+  }
+
+  /* ---------- sections ---------- */
+  section { max-width: var(--maxw); margin: 0 auto; padding: 180px 48px 0; scroll-margin-top: 92px; }
+  .sec-head { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 50px; }
+  .sec-num { font-family: var(--display); font-size: 30px; font-weight: 400; color: var(--gold); letter-spacing: 0.1em; }
+  .sec-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-faint); }
+  .sec-head .dash { width: 30px; height: 1px; background: var(--hairline-soft); }
+  h2 {
+    font-family: var(--display); font-weight: 400;
+    font-size: clamp(46px, 5.4vw, 72px); line-height: 1.1;
+    margin: 0 auto 30px; text-wrap: balance; text-align: center; max-width: 15em;
+  }
+  h2 em { font-style: italic; color: var(--gold); }
+  .lede { font-size: 22px; color: var(--ink); max-width: 33em; text-wrap: pretty; text-align: center; margin: 0 auto; }
+  .body-copy { color: var(--ink-dim); max-width: 33em; margin: 18px auto 0; text-wrap: pretty; text-align: center; }
+  .body-copy strong { color: var(--ink); font-weight: 500; }
+
+  /* problem costs */
+  .cost-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 70px; border-top: 1px solid var(--hairline-soft); }
+  .cost { padding: 32px 30px 8px; border-left: 1px solid var(--hairline-soft); }
+  .cost:first-child { border-left: none; padding-left: 0; }
+  .cost .c-figure { font-family: var(--display); font-size: 30px; color: var(--gold); line-height: 1; margin-bottom: 16px; font-style: italic; }
+  .cost .c-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-dim); margin-bottom: 12px; }
+  .cost p { font-size: 16.5px; color: var(--ink-dim); }
+
+  /* chart */
+  figure.chart { margin-top: 70px; }
+  .chart-frame { border: 1px solid var(--hairline-soft); padding: 44px 40px 30px; background: var(--bg2); position: relative; }
+  .chart-frame::before, .chart-frame::after { content: ""; position: absolute; width: 9px; height: 9px; border: 1px solid var(--hairline); }
+  .chart-frame::before { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
+  .chart-frame::after { bottom: 12px; right: 12px; border-left: 0; border-top: 0; }
+  .chart-frame svg { width: 100%; height: auto; display: block; }
+  figcaption {
+    margin-top: 18px; font-family: var(--mono); font-size: 11.5px;
+    letter-spacing: 0.12em; color: var(--ink-faint); text-transform: uppercase;
+    display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  }
+  .ch-line { fill: none; stroke: var(--gold); stroke-width: 1.6; }
+  .ch-area { fill: url(#noveltyFill); opacity: 0; transition: opacity 1s ease 1.6s; }
+  .chart.in .ch-area { opacity: 1; }
+  .ch-axis { stroke: var(--hairline); stroke-width: 1; }
+  .ch-grid { stroke: rgba(217,187,130,0.07); stroke-width: 1; }
+  .ch-thresh { stroke: var(--ink-dim); stroke-width: 1; stroke-dasharray: 2 6; }
+  .ch-pt { fill: var(--bg); stroke: var(--gold); stroke-width: 1.4; }
+  .ch-ghost { stroke: var(--ink-faint); stroke-width: 1.2; }
+  .ch-text { font-family: var(--mono); font-size: 11px; fill: var(--ink-faint); letter-spacing: 0.08em; }
+  .ch-text.lit { fill: var(--gold); }
+  .ch-text.dim { fill: var(--ink-faint); }
+  .ch-serif { font-family: var(--display); font-style: italic; font-size: 17px; fill: var(--ink); }
+  .ch-call { stroke: var(--gold); stroke-width: 1; }
+
+  /* loop — cycle + list */
+  .loop-wrap { display: grid; grid-template-columns: 440px 1fr; gap: 56px; margin-top: 64px; align-items: center; }
+  .cycle { position: relative; display: grid; place-items: center; }
+  .cycle .cycle-mark {
+    width: 100%; max-width: 420px; height: auto; display: block;
+    mix-blend-mode: screen;
+    filter: drop-shadow(0 0 26px rgba(217, 187, 130, 0.18));
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .cycle .cycle-mark { opacity: 0; transform: scale(0.96); transition: opacity 1.1s ease 0.2s, transform 1.4s ease 0.2s; }
+    .cycle.in .cycle-mark { opacity: 1; transform: none; }
+  }
+
+  .loop-list { list-style: none; }
+  .loop-step {
+    display: grid; grid-template-columns: 54px 1fr; gap: 22px;
+    padding: 22px 0; border-top: 1px solid var(--hairline-soft); align-items: baseline; transition: border-color 0.3s;
+  }
+  .loop-step:last-of-type { border-bottom: 1px solid var(--hairline-soft); }
+  .loop-step.hot { border-top-color: var(--gold-dim); }
+  .loop-step .step-num { font-family: var(--display); font-style: italic; font-size: 26px; color: var(--gold); }
+  .loop-step .step-name { font-family: var(--display); font-size: 25px; font-weight: 500; display: block; margin-bottom: 4px; }
+  .loop-step p { color: var(--ink-dim); font-size: 16.5px; }
+  .loop-step code {
+    font-family: var(--mono); font-size: 12.5px; color: var(--gold);
+    background: rgba(217,187,130,0.07); padding: 1px 6px; border-radius: 2px; white-space: nowrap;
+  }
+
+  /* verdicts */
+  .verdict-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hairline-soft); border: 1px solid var(--hairline-soft); margin-top: 64px; }
+  .verdict { background: var(--bg); padding: 42px 40px 46px; transition: background 0.3s; }
+  .verdict:hover { background: var(--bg2); }
+  .verdict .v-mark { font-family: var(--mono); font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
+  .v-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .verdict h3 { font-family: var(--display); font-size: 32px; font-weight: 500; margin-bottom: 12px; }
+  .verdict p { font-size: 16.5px; color: var(--ink-dim); text-wrap: pretty; }
+  .verdict .v-action { margin-top: 18px; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); display: inline-flex; gap: 8px; }
+  .verdict .v-action span { color: var(--gold); }
+
+  /* outcome */
+  .outcome-wrap { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; margin-top: 64px; align-items: start; text-align: left; }
+  .verdict-card { border: 1px solid var(--hairline); padding: 42px 40px; background: var(--bg2); position: sticky; top: 110px; }
+  .verdict-card .vc-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--gold-dim); margin-bottom: 22px; }
+  .vc-big { font-family: var(--display); font-size: 46px; line-height: 1.05; margin-bottom: 8px; }
+  .vc-big em { font-style: italic; color: var(--gold); }
+  .vc-sub { color: var(--ink-dim); font-size: 17px; margin-bottom: 30px; }
+  .vc-stats { border-top: 1px solid var(--hairline-soft); }
+  .vc-stat { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--hairline-soft); font-size: 16px; }
+  .vc-stat .k { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); align-self: center; }
+  .vc-stat .v { font-family: var(--display); font-size: 22px; color: var(--ink); }
+  .vc-stat .v.gold { color: var(--gold); }
+  .report-ph { border: 1px solid var(--hairline-soft); background: var(--bg2); }
+  .report-ph .ph-bar { display: flex; justify-content: space-between; padding: 14px 24px; border-bottom: 1px dashed var(--hairline); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-dim); }
+  .report-body { padding: 34px 38px 40px; }
+  .report-body h4 { font-family: var(--display); font-size: 25px; font-weight: 500; margin-bottom: 10px; }
+  .report-body .finding { padding: 22px 0; border-top: 1px solid var(--hairline-soft); }
+  .report-body .finding:first-of-type { border-top: none; padding-top: 0; }
+  .report-body p { font-size: 16.5px; color: var(--ink-dim); }
+  .report-body blockquote { font-family: var(--display); font-style: italic; font-size: 19px; color: var(--ink); margin: 12px 0 10px; padding-left: 18px; border-left: 1px solid var(--gold-dim); }
+  .cites { display: flex; gap: 18px; flex-wrap: wrap; }
+  .cite { font-family: var(--mono); font-size: 11px; color: var(--gold-dim); letter-spacing: 0.06em; text-decoration: none; }
+  .cite:hover { color: var(--gold); }
+  .ph-note { padding: 12px 24px 14px; border-top: 1px dashed var(--hairline); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+
+  /* trust */
+  .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px 70px; margin-top: 64px; text-align: left; }
+  .trust-item { border-top: 1px solid var(--hairline-soft); padding-top: 26px; }
+  .trust-item .t-num { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; color: var(--gold-dim); margin-bottom: 14px; }
+  .trust-item h3 { font-family: var(--display); font-size: 28px; font-weight: 500; margin-bottom: 10px; }
+  .trust-item p { font-size: 17px; color: var(--ink-dim); text-wrap: pretty; }
+
+  /* about */
+  .about-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 70px; margin-top: 20px; align-items: start; text-align: left; }
+  .about-wrap h2 { text-align: left; margin-left: 0; }
+  .video-ph {
+    aspect-ratio: 16 / 9; border: 1px solid var(--hairline);
+    background: repeating-linear-gradient(-45deg, transparent 0 14px, rgba(217,187,130,0.04) 14px 15px), var(--bg2);
+    display: grid; place-items: center; position: relative; cursor: pointer; transition: border-color 0.25s;
+  }
+  .video-ph:hover { border-color: var(--gold-dim); }
+  .video-ph .play { width: 74px; height: 74px; border: 1px solid var(--gold-dim); border-radius: 50%; display: grid; place-items: center; color: var(--gold); font-size: 18px; transition: transform 0.25s; }
+  .video-ph:hover .play { transform: scale(1.07); }
+  .video-ph .vp-label { position: absolute; bottom: 16px; left: 18px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-faint); }
+  .about-links { display: grid; gap: 14px; margin-top: 34px; max-width: 420px; }
+  .about-links .btn { justify-content: space-between; }
+  .gq-note { margin-top: 34px; font-size: 15px; color: var(--ink-faint); font-style: italic; max-width: 30em; }
+
+  /* footer */
+  footer { margin-top: 160px; border-top: 1px solid var(--hairline-soft); }
+  .foot-inner { max-width: var(--maxw); margin: 0 auto; padding: 56px 48px 60px; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: start; }
+  .foot-mark { font-family: var(--display); font-size: 40px; letter-spacing: 0.3em; text-indent: 0.3em; color: var(--ink); margin-bottom: 12px; }
+  .foot-tag { font-family: var(--display); font-style: italic; font-size: 19px; color: var(--ink-dim); }
+  .foot-nav { display: grid; gap: 10px; justify-items: end; }
+  .foot-nav a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); text-decoration: none; transition: color 0.2s; }
+  .foot-nav a:hover { color: var(--gold); }
+  .foot-meta { max-width: var(--maxw); margin: 0 auto; padding: 0 48px 50px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
+  .to-top { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); text-decoration: none; display: inline-flex; gap: 8px; align-items: center; transition: color 0.2s; }
+  .to-top:hover { color: var(--gold); }
+
+  /* reveal */
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { opacity: 0; transform: translateY(26px); transition: opacity 0.9s ease, transform 0.9s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+    .ch-line { stroke-dasharray: 1400; stroke-dashoffset: 1400; transition: stroke-dashoffset 2.4s ease 0.3s; }
+    .chart.in .ch-line { stroke-dashoffset: 0; }
+    .cy-draw { stroke-dasharray: 1100; stroke-dashoffset: 1100; transition: stroke-dashoffset 2s ease 0.4s; }
+    .cycle.in .cy-draw { stroke-dashoffset: 0; }
+  }
+  @media (max-width: 960px) {
+    .cost-row, .verdict-grid, .trust-grid, .outcome-wrap, .about-wrap, .loop-wrap { grid-template-columns: 1fr; }
+    .loop-wrap { gap: 40px; }
+    .cycle { max-width: 380px; margin: 0 auto; }
+    .verdict-card { position: static; }
+    .nav-links, .rail { display: none; }
+    section { padding: 110px 26px 0; }
+    .foot-inner { grid-template-columns: 1fr; }
+    .foot-nav { justify-items: start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<nav>
+  <a class="wordmark" href="#top"><span class="mk"></span>ATLAS</a>
+  <div class="nav-links" id="navlinks">
+    <a href="#problem">Problem</a>
+    <a href="#insight">Insight</a>
+    <a href="#loop">The Loop</a>
+    <a href="#verdicts">Verdicts</a>
+    <a href="#outcome">Outcome</a>
+    <a href="#trust">Trust</a>
+    <a href="#about">About</a>
+  </div>
+</nav>
+
+<aside class="rail" id="rail" aria-hidden="true">
+  <a href="#problem" data-sec="problem"><span class="r-label">Problem</span><span class="r-tick"></span></a>
+  <a href="#insight" data-sec="insight"><span class="r-label">Insight</span><span class="r-tick"></span></a>
+  <a href="#loop" data-sec="loop"><span class="r-label">The Loop</span><span class="r-tick"></span></a>
+  <a href="#verdicts" data-sec="verdicts"><span class="r-label">Verdicts</span><span class="r-tick"></span></a>
+  <a href="#outcome" data-sec="outcome"><span class="r-label">Outcome</span><span class="r-tick"></span></a>
+  <a href="#trust" data-sec="trust"><span class="r-label">Trust</span><span class="r-tick"></span></a>
+  <a href="#about" data-sec="about"><span class="r-label">About</span><span class="r-tick"></span></a>
+</aside>
+
+<header id="top" data-screen-label="Hero">
+  <div class="hero-art"><img src="assets/atlas-globe-white.png" alt="Engraving of Atlas bearing a globe"></img></div>
+  <div class="hero-vign"></div>
+  <div class="hero-inner">
+    <div class="kicker">An engineering prototype · Built on Great Question's MCP</div>
+    <h1 class="hero-title">ATLAS</h1>
+    <p class="hero-sub">An agent loop that knows when research is done.</p>
+    <p class="hero-note">Atlas runs an autonomous research-synthesis loop over interview sessions: it reads each transcript as it lands, measures how much is genuinely new, and tells the team the moment further interviews stop teaching anything.</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="#about"><span class="glyph">▶</span> Watch the demo</a>
+      <a class="btn" href="https://github.com/josuediazflores/Atlas" target="_blank" rel="noopener">View the repository <span class="glyph">↗</span></a>
+    </div>
+  </div>
+  <div class="scroll-hint"><span>Scroll</span><span class="ln"></span></div>
+</header>
+
+<main>
+  <section id="problem" data-screen-label="The problem">
+    <div class="sec-head reveal"><span class="sec-num">I.</span><span class="dash"></span><span class="sec-label">The problem</span></div>
+    <h2 class="reveal">Qualitative research has <em>no stopping point.</em></h2>
+    <p class="lede reveal">A study plan says “recruit twelve to fifteen participants” because nobody knows the real number. So teams keep recruiting and keep interviewing — often well past the point where new sessions teach them anything new.</p>
+    <p class="body-copy reveal">The question <strong>“have we heard enough?”</strong> is usually answered by feel, if it is answered at all. And every extra session that runs past that point costs real money.</p>
+    <div class="cost-row reveal">
+      <div class="cost"><div class="c-figure">i</div><div class="c-label">Incentives</div><p>Every participant is paid, whether or not their session adds a single new theme.</p></div>
+      <div class="cost"><div class="c-figure">ii</div><div class="c-label">Recruiting</div><p>Sourcing, screening, and scheduling each additional participant carries its own fee.</p></div>
+      <div class="cost"><div class="c-figure">iii</div><div class="c-label">Researcher time</div><p>Moderating, note-taking, and synthesis hours accumulate on sessions that change nothing.</p></div>
+    </div>
+  </section>
+
+  <section id="insight" data-screen-label="The insight">
+    <div class="sec-head reveal"><span class="sec-num">II.</span><span class="dash"></span><span class="sec-label">The insight</span></div>
+    <h2 class="reveal">Saturation is a stopping condition <em>you can verify.</em></h2>
+    <p class="lede reveal">Qualitative researchers have had the answer for decades. It is called <strong style="color: var(--ink); font-weight: 500;">saturation</strong>: you stop interviewing when new sessions stop yielding new themes.</p>
+    <p class="body-copy reveal">What makes saturation interesting to an engineer is that it is <strong>verifiable</strong>. An autonomous loop needs a halting condition it can check — not a vibe, a measurement. Score each session for the novelty it adds; when that score stays under a threshold, the work is done. Saturation turns “enough research” into a condition a machine can test.</p>
+
+    <figure class="chart reveal" aria-label="Novelty score per session, declining across a run and crossing the saturation threshold at session nine">
+      <div class="chart-frame">
+        <svg viewBox="0 0 980 430" role="img">
+          <defs>
+            <linearGradient id="noveltyFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="oklch(0.8 0.1 85)" stop-opacity="0.18"></stop>
+              <stop offset="100%" stop-color="oklch(0.8 0.1 85)" stop-opacity="0"></stop>
+            </linearGradient>
+          </defs>
+          <line class="ch-grid" x1="60" y1="30" x2="940" y2="30"></line>
+          <line class="ch-grid" x1="60" y1="112.5" x2="940" y2="112.5"></line>
+          <line class="ch-grid" x1="60" y1="195" x2="940" y2="195"></line>
+          <line class="ch-grid" x1="60" y1="277.5" x2="940" y2="277.5"></line>
+          <line class="ch-axis" x1="60" y1="360" x2="940" y2="360"></line>
+          <line class="ch-axis" x1="60" y1="22" x2="60" y2="360"></line>
+          <text class="ch-text" x="44" y="34" text-anchor="end">1.0</text>
+          <text class="ch-text" x="44" y="199" text-anchor="end">0.5</text>
+          <text class="ch-text" x="44" y="364" text-anchor="end">0</text>
+
+          <path class="ch-area" d="M 60 30 L 127.7 89.4 L 195.4 132.3 L 263.1 178.5 L 330.8 214.8 L 398.5 257.7 L 466.2 280.8 L 533.8 297.3 L 601.5 310.5 L 601.5 360 L 60 360 Z"></path>
+
+          <line class="ch-thresh" x1="60" y1="277.5" x2="940" y2="277.5"></line>
+          <text class="ch-text dim" x="938" y="268" text-anchor="end">SATURATION THRESHOLD · 0.25</text>
+
+          <path class="ch-line" d="M 60 30 L 127.7 89.4 L 195.4 132.3 L 263.1 178.5 L 330.8 214.8 L 398.5 257.7 L 466.2 280.8 L 533.8 297.3 L 601.5 310.5"></path>
+          <circle class="ch-pt" cx="60" cy="30" r="4"></circle>
+          <circle class="ch-pt" cx="127.7" cy="89.4" r="4"></circle>
+          <circle class="ch-pt" cx="195.4" cy="132.3" r="4"></circle>
+          <circle class="ch-pt" cx="263.1" cy="178.5" r="4"></circle>
+          <circle class="ch-pt" cx="330.8" cy="214.8" r="4"></circle>
+          <circle class="ch-pt" cx="398.5" cy="257.7" r="4"></circle>
+          <circle class="ch-pt" cx="466.2" cy="280.8" r="4"></circle>
+          <circle class="ch-pt" cx="533.8" cy="297.3" r="4"></circle>
+
+          <line class="ch-call" x1="601.5" y1="310.5" x2="601.5" y2="64" stroke-dasharray="3 4"></line>
+          <circle cx="601.5" cy="310.5" r="6.5" fill="none" stroke="oklch(0.8 0.1 85)" stroke-width="1.4"></circle>
+          <circle cx="601.5" cy="310.5" r="2.6" fill="oklch(0.8 0.1 85)"></circle>
+          <text class="ch-serif" x="601.5" y="48" text-anchor="middle">Atlas calls saturation</text>
+          <text class="ch-text lit" x="601.5" y="80" text-anchor="middle">3RD CONSECUTIVE SESSION BELOW THRESHOLD</text>
+
+          <g class="ch-ghost" fill="none">
+            <path d="M 664.2 325 l 10 10 m 0 -10 l -10 10"></path>
+            <path d="M 731.9 325 l 10 10 m 0 -10 l -10 10"></path>
+            <path d="M 799.6 325 l 10 10 m 0 -10 l -10 10"></path>
+            <path d="M 867.3 325 l 10 10 m 0 -10 l -10 10"></path>
+            <path d="M 935 325 l 10 10 m 0 -10 l -10 10"></path>
+          </g>
+          <text class="ch-text dim" x="806" y="306" text-anchor="middle">SESSIONS THAT NEVER NEED TO RUN</text>
+
+          <text class="ch-text" x="60" y="386" text-anchor="middle">S1</text>
+          <text class="ch-text" x="195.4" y="386" text-anchor="middle">S3</text>
+          <text class="ch-text" x="330.8" y="386" text-anchor="middle">S5</text>
+          <text class="ch-text" x="466.2" y="386" text-anchor="middle">S7</text>
+          <text class="ch-text lit" x="601.5" y="386" text-anchor="middle">S9</text>
+          <text class="ch-text dim" x="736.9" y="386" text-anchor="middle">S11</text>
+          <text class="ch-text dim" x="872.3" y="386" text-anchor="middle">S13</text>
+          <text class="ch-text" x="60" y="420" text-anchor="start">NOVELTY SCORE PER SESSION →</text>
+        </svg>
+      </div>
+      <figcaption><span>Fig. 1 — Novelty decline across one run</span><span>Threshold 0.25 · K = 3 consecutive</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="loop" data-screen-label="How the loop works">
+    <div class="sec-head reveal"><span class="sec-num">III.</span><span class="dash"></span><span class="sec-label">How the loop works</span></div>
+    <h2 class="reveal">Five steps, <em>repeated</em> until a verdict.</h2>
+    <p class="lede reveal">Each pass through the loop consumes exactly one session and ends with a decision: continue, or halt with a verdict.</p>
+
+    <div class="loop-wrap reveal">
+      <div class="cycle" aria-hidden="true" data-comment-anchor="ee64c1c42d-svg">
+        <img class="cycle-mark" src="assets/loop-infinity-gold.png" alt=""></img>
+      </div>
+
+      <ol class="loop-list">
+        <li class="loop-step" data-step="0">
+          <span class="step-num">i</span>
+          <div><span class="step-name">Fetch</span><p>Pull the next session transcript through Great Question's MCP server — <code>search_studies</code>, <code>list_repo_sessions</code>, <code>get_transcript</code>.</p></div>
+        </li>
+        <li class="loop-step" data-step="1">
+          <span class="step-num">ii</span>
+          <div><span class="step-name">Extract</span><p>An LLM reads the transcript and extracts themes, each anchored to the verbatim quotes that support it.</p></div>
+        </li>
+        <li class="loop-step" data-step="2">
+          <span class="step-num">iii</span>
+          <div><span class="step-name">Score novelty</span><p>New themes are embedded and compared against the accumulated set. The distance between them becomes the session's novelty score.</p></div>
+        </li>
+        <li class="loop-step" data-step="3">
+          <span class="step-num">iv</span>
+          <div><span class="step-name">Verify</span><p>A separate verifier model grades the extraction for faithfulness to the transcript. The worker never marks its own homework.</p></div>
+        </li>
+        <li class="loop-step" data-step="4">
+          <span class="step-num">v</span>
+          <div><span class="step-name">Decide</span><p>Continue or halt, judged against the saturation threshold, the quality floor, and the budget cap — then return to the top for the next session.</p></div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="verdicts" data-screen-label="Four ways a run ends">
+    <div class="sec-head reveal"><span class="sec-num">IV.</span><span class="dash"></span><span class="sec-label">Four ways a run ends</span></div>
+    <h2 class="reveal">Every ending is a <em>verdict,</em> not an error.</h2>
+    <p class="lede reveal">A run never simply stops. It concludes — and each conclusion tells the team something different to do next.</p>
+
+    <div class="verdict-grid reveal">
+      <div class="verdict">
+        <div class="v-mark" style="color: oklch(0.8 0.1 85);"><span class="v-dot" style="background: oklch(0.8 0.1 85);"></span>Verdict 1</div>
+        <h3>Saturated</h3>
+        <p>Novelty stayed below the threshold for <em>k</em> consecutive sessions. The themes have converged; new interviews are repeating old ones.</p>
+        <div class="v-action"><span>→</span> Stop recruiting</div>
+      </div>
+      <div class="verdict">
+        <div class="v-mark" style="color: oklch(0.72 0.1 55);"><span class="v-dot" style="background: oklch(0.72 0.1 55);"></span>Verdict 2</div>
+        <h3>Quality halt</h3>
+        <p>The verifier's faithfulness score dropped below the floor. The synthesis can no longer be trusted, so the loop refuses to continue on top of it.</p>
+        <div class="v-action"><span>→</span> Review extraction before resuming</div>
+      </div>
+      <div class="verdict">
+        <div class="v-mark" style="color: oklch(0.7 0.06 85);"><span class="v-dot" style="background: oklch(0.7 0.06 85);"></span>Verdict 3</div>
+        <h3>Budget halt</h3>
+        <p>Spend exceeded the cap set at the start of the run. The loop stops before the budget does — never the other way around.</p>
+        <div class="v-action"><span>→</span> Raise the cap or accept partial synthesis</div>
+      </div>
+      <div class="verdict">
+        <div class="v-mark" style="color: oklch(0.75 0.02 85);"><span class="v-dot" style="background: oklch(0.75 0.02 85);"></span>Verdict 4</div>
+        <h3>Not saturated</h3>
+        <p>Sessions ran out while novelty was still above the threshold. The field is still teaching; the study genuinely needs more voices.</p>
+        <div class="v-action"><span>→</span> Keep recruiting</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="outcome" data-screen-label="The outcome">
+    <div class="sec-head reveal"><span class="sec-num">V.</span><span class="dash"></span><span class="sec-label">The outcome</span></div>
+    <h2 class="reveal">What a finished run <em>hands back.</em></h2>
+    <p class="lede reveal">One verdict, one savings estimate, and a findings report where every claim can be traced to the session that said it.</p>
+
+    <div class="outcome-wrap">
+      <aside class="verdict-card reveal">
+        <div class="vc-label">Sample verdict · Run №7</div>
+        <div class="vc-big"><em>Saturated</em> at session 9 of 14</div>
+        <p class="vc-sub">Novelty below 0.25 for three consecutive sessions.</p>
+        <div class="vc-stats">
+          <div class="vc-stat"><span class="k">Sessions analysed</span><span class="v">9</span></div>
+          <div class="vc-stat"><span class="k">Sessions cancelled</span><span class="v">5</span></div>
+          <div class="vc-stat"><span class="k">Est. cost per session</span><span class="v">≈ $300</span></div>
+          <div class="vc-stat"><span class="k">Estimated savings</span><span class="v gold" data-count="1500" data-prefix="≈ $">≈ $1,500</span></div>
+          <div class="vc-stat"><span class="k">Verifier floor</span><span class="v">held</span></div>
+        </div>
+      </aside>
+
+      <div class="report-ph reveal">
+        <div class="ph-bar"><span>Findings report — excerpt</span><span>Atlas · Run №7</span></div>
+        <div class="report-body">
+          <div class="finding">
+            <h4>Finding 3 — Pricing opacity erodes trust before the first invoice</h4>
+            <p>Seven of nine participants raised cost predictability unprompted; the theme stabilised by session 4.</p>
+            <blockquote>“I couldn't tell my manager what this would cost us next quarter, so I stopped recommending it.”</blockquote>
+            <div class="cites"><a class="cite" href="#about">S4 · 00:18:22 ↗</a><a class="cite" href="#about">S7 · 00:41:05 ↗</a></div>
+          </div>
+          <div class="finding">
+            <h4>Finding 4 — Onboarding stalls at the permissions handoff</h4>
+            <p>Every admin participant described the same dead end between inviting a team and granting data access.</p>
+            <blockquote>“We sat in a meeting trying to figure out who could even click the button.”</blockquote>
+            <div class="cites"><a class="cite" href="#about">S2 · 00:07:48 ↗</a><a class="cite" href="#about">S6 · 00:29:14 ↗</a><a class="cite" href="#about">S9 · 00:12:30 ↗</a></div>
+          </div>
+        </div>
+        <div class="ph-note">Placeholder — excerpt of a real generated report lands here</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="trust" data-screen-label="Trust by design">
+    <div class="sec-head reveal"><span class="sec-num">VI.</span><span class="dash"></span><span class="sec-label">Trust by design</span></div>
+    <h2 class="reveal">Autonomy, <em>bounded</em> on every side.</h2>
+    <p class="lede reveal">An agent that spends money and writes findings has to be built defensively. Four constraints hold on every run, without exception.</p>
+
+    <div class="trust-grid">
+      <div class="trust-item reveal">
+        <div class="t-num">№ 1</div>
+        <h3>Every claim is grounded</h3>
+        <p>No finding exists without a citable verbatim quote, and every quote is traceable to its source session and timestamp.</p>
+      </div>
+      <div class="trust-item reveal">
+        <div class="t-num">№ 2</div>
+        <h3>The worker never grades itself</h3>
+        <p>Extraction and verification are performed by separate models. The one that does the work is never the one that judges it.</p>
+      </div>
+      <div class="trust-item reveal">
+        <div class="t-num">№ 3</div>
+        <h3>Writes wait for a human</h3>
+        <p>Any write action against the research platform is held until a person explicitly approves it. Reading is autonomous; changing things is not.</p>
+      </div>
+      <div class="trust-item reveal">
+        <div class="t-num">№ 4</div>
+        <h3>A hard budget cap</h3>
+        <p>Every run starts with a spending ceiling. Crossing it halts the loop — a verdict, recorded and reported like any other.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="about" data-screen-label="About this project">
+    <div class="sec-head reveal"><span class="sec-num">VII.</span><span class="dash"></span><span class="sec-label">About this project</span></div>
+    <div class="about-wrap">
+      <div class="reveal">
+        <h2>A working <em>prototype,</em> honestly framed.</h2>
+        <p class="body-copy" style="margin: 4px 0 0; text-align: left;">Atlas is an engineering prototype, not a product. It was built to test one idea: that saturation — a concept qualitative researchers already trust — gives an autonomous agent loop a stopping condition it can actually verify. It runs against real studies through Great Question's MCP integration.</p>
+        <div class="about-links">
+          <a class="btn primary" href="#about">Watch the demo <span class="glyph">▶</span></a>
+          <a class="btn" href="https://github.com/josuediazflores/Atlas" target="_blank" rel="noopener">View the repository <span class="glyph">↗</span></a>
+        </div>
+        <p class="gq-note">Great Question is referenced here as the research platform whose MCP server Atlas builds on. No affiliation or endorsement is implied.</p>
+      </div>
+      <div class="reveal">
+        <div class="video-ph">
+          <div class="play">▶</div>
+          <div class="vp-label">Placeholder — demo video embed</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-inner">
+    <div>
+      <div class="foot-mark">ATLAS</div>
+      <div class="foot-tag">An agent loop that knows when research is done.</div>
+    </div>
+    <div class="foot-nav">
+      <a href="#problem">The problem</a>
+      <a href="#insight">The insight</a>
+      <a href="#loop">How the loop works</a>
+      <a href="#verdicts">Four ways a run ends</a>
+      <a href="#outcome">The outcome</a>
+      <a href="#trust">Trust by design</a>
+      <a href="#about">About this project</a>
+    </div>
+  </div>
+  <div class="foot-meta">
+    <span>Engineering prototype · Built on Great Question's MCP · MMXXVI</span>
+    <a class="to-top" href="#top">↑ Back to top</a>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // reveal on scroll
+    if (reduce) {
+      document.querySelectorAll('.reveal, .chart, .cycle').forEach(function (el) { el.classList.add('in'); });
+    } else {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.12 });
+      document.querySelectorAll('.reveal, .chart, .cycle').forEach(function (el) { io.observe(el); });
+    }
+
+    // reading progress
+    var progress = document.getElementById('progress');
+    function onScroll() {
+      var h = document.documentElement;
+      var max = h.scrollHeight - h.clientHeight;
+      var pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+      progress.style.width = pct + '%';
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    // scroll-spy: nav + rail active states
+    var sections = ['problem','insight','loop','verdicts','outcome','trust','about'];
+    var navMap = {}, railMap = {};
+    document.querySelectorAll('#navlinks a').forEach(function (a) {
+      navMap[a.getAttribute('href').slice(1)] = a;
+    });
+    document.querySelectorAll('#rail a').forEach(function (a) {
+      railMap[a.getAttribute('data-sec')] = a;
+    });
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          var id = e.target.id;
+          sections.forEach(function (s) {
+            if (navMap[s]) navMap[s].classList.toggle('active', s === id);
+            if (railMap[s]) railMap[s].classList.toggle('active', s === id);
+          });
+        }
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    sections.forEach(function (s) {
+      var el = document.getElementById(s);
+      if (el) spy.observe(el);
+    });
+
+    // loop cycle <-> list hover linking
+    function linkSteps(nodes, partnerSel) {
+      nodes.forEach(function (n) {
+        var step = n.getAttribute('data-step');
+        function on() {
+          document.querySelectorAll('[data-step="' + step + '"]').forEach(function (el) { el.classList.add('hot'); });
+        }
+        function off() {
+          document.querySelectorAll('[data-step="' + step + '"]').forEach(function (el) { el.classList.remove('hot'); });
+        }
+        n.addEventListener('mouseenter', on);
+        n.addEventListener('mouseleave', off);
+      });
+    }
+    linkSteps(Array.prototype.slice.call(document.querySelectorAll('.cy-g')));
+    linkSteps(Array.prototype.slice.call(document.querySelectorAll('.loop-step')));
+
+    // count-up for the savings figure
+    function animateCount(el) {
+      var target = parseFloat(el.getAttribute('data-count'));
+      var prefix = el.getAttribute('data-prefix') || '';
+      if (reduce) { el.textContent = prefix + target.toLocaleString(); return; }
+      var start = null, dur = 1400;
+      function frame(t) {
+        if (start === null) start = t;
+        var p = Math.min((t - start) / dur, 1);
+        var eased = 1 - Math.pow(1 - p, 3);
+        var val = Math.round(target * eased);
+        el.textContent = prefix + val.toLocaleString();
+        if (p < 1) requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+    var counted = false;
+    var countEl = document.querySelector('[data-count]');
+    if (countEl) {
+      var cio = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting && !counted) { counted = true; animateCount(countEl); cio.disconnect(); }
+        });
+      }, { threshold: 0.6 });
+      cio.observe(countEl);
+    }
+  })();
+</script>
+
+</body>
+</html>

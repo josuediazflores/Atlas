@@ -1,0 +1,104 @@
+{
+  "id": "s1",
+  "studyId": "pricing-study",
+  "participant": {
+    "id": "P1",
+    "role": "Researcher",
+    "segment": "Enterprise"
+  },
+  "durationSec": 1860,
+  "transcript": [
+    {
+      "line": 1,
+      "t": "00:00:12",
+      "speaker": "Moderator",
+      "text": "Thanks for making the time. To start, tell me about your work."
+    },
+    {
+      "line": 2,
+      "t": "00:01:39",
+      "speaker": "P1",
+      "text": "I'm a researcher on a enterprise team."
+    },
+    {
+      "line": 3,
+      "t": "00:03:23",
+      "speaker": "Moderator",
+      "text": "How did pricing factor into your decision?"
+    },
+    {
+      "line": 4,
+      "t": "00:04:44",
+      "speaker": "P1",
+      "text": "The pricing was opaque — I genuinely could not forecast the cost for next quarter."
+    },
+    {
+      "line": 5,
+      "t": "00:06:22",
+      "speaker": "Moderator",
+      "text": "How did connecting your existing tools go?"
+    },
+    {
+      "line": 6,
+      "t": "00:07:37",
+      "speaker": "P1",
+      "text": "The integration took our engineers a few sessions to configure and sync properly."
+    },
+    {
+      "line": 7,
+      "t": "00:09:09",
+      "speaker": "Moderator",
+      "text": "How do you find past research in the tool?"
+    },
+    {
+      "line": 8,
+      "t": "00:10:58",
+      "speaker": "P1",
+      "text": "Search is noisy — I filter by tag and date manually to find the right study."
+    },
+    {
+      "line": 9,
+      "t": "00:12:24",
+      "speaker": "Moderator",
+      "text": "That’s really helpful — anything else before we wrap?"
+    },
+    {
+      "line": 10,
+      "t": "00:14:07",
+      "speaker": "P1",
+      "text": "No, I think that covers the main pain points."
+    }
+  ],
+  "themes": [
+    {
+      "key": "pricing_opacity",
+      "label": "Pricing opacity erodes trust before the first invoice",
+      "summary": "Buyers cannot predict what the product will cost next quarter, so they stop advocating for it internally with their manager and finance.",
+      "quotes": [
+        {
+          "line": 4
+        }
+      ]
+    },
+    {
+      "key": "integration_setup",
+      "label": "Integration setup costs engineering time",
+      "summary": "Connecting the existing data warehouse and tools takes several engineering sessions to configure and sync correctly.",
+      "quotes": [
+        {
+          "line": 6
+        }
+      ]
+    },
+    {
+      "key": "search_relevance",
+      "label": "Search returns noisy results",
+      "summary": "Finding the right past study or highlight returns noisy results that need manual filtering by tag and date.",
+      "quotes": [
+        {
+          "line": 8
+        }
+      ]
+    }
+  ]
+}
