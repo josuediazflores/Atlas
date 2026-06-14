@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas — live run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="wordmark" href="/"><span class="mk"></span>ATLAS</a>
+  <div class="tagline">an agent loop that knows when research is done</div>
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">idle</span></div>
+</header>
+
+<main>
+  <!-- ─── Run setup ─────────────────────────────────────────────────────── -->
+  <section id="setup" class="panel">
+    <div class="sec-kicker">Run setup</div>
+    <h1>Synthesize a study <em>until saturation.</em></h1>
+    <p class="lede">Atlas processes one interview session per iteration — fetch, extract, score novelty, verify, decide — and halts the moment new sessions stop teaching anything. Configure a run and watch the novelty curve cross the line.</p>
+
+    <div class="form">
+      <label class="field"><span>Study</span><select id="study"></select></label>
+      <label class="field"><span>Novelty threshold</span><input id="threshold" type="number" value="0.15" step="0.01" min="0" max="1"></label>
+      <label class="field"><span>k — consecutive sessions</span><input id="k" type="number" value="3" min="1" max="10"></label>
+      <label class="field"><span>Quality floor</span><input id="qualityFloor" type="number" value="0.6" step="0.05" min="0" max="1"></label>
+      <label class="field"><span>Budget cap (USD)</span><input id="budget" type="number" value="100000" step="0.01"></label>
+      <label class="field"><span>Pace (ms / session)</span><input id="pace" type="number" value="480" step="40" min="0"></label>
+    </div>
+    <p class="study-desc" id="studyDesc"></p>
+    <div class="actions">
+      <button id="run" class="btn primary">Begin run <span class="glyph">▸</span></button>
+      <span class="hint">try budget 0.05 → budget halt · floor 0.7 → quality halt · threshold 0 → not saturated</span>
+    </div>
+  </section>
+
+  <!-- ─── Live run ──────────────────────────────────────────────────────── -->
+  <section id="live" class="hidden">
+    <div class="live-head">
+      <div>
+        <div class="study-name" id="studyName"></div>
+        <div class="run-meta" id="runMeta"></div>
+      </div>
+      <button id="stop" class="btn ghost">Stop</button>
+    </div>
+
+    <div class="grid">
+      <div class="col-main">
+        <figure class="card chart-card">
+          <figcaption><span>Novelty per session</span><span id="chartCaption" class="mono dim"></span></figcaption>
+          <svg id="chart" viewBox="0 0 720 320" role="img" aria-label="Novelty per session"></svg>
+          <div class="chart-hint dim mono">click a point to inspect that iteration</div>
+        </figure>
+
+        <div class="card halt-card">
+          <h3>Four ways this run can end</h3>
+          <div class="halts" id="halts">
+            <div class="halt" data-kind="saturated">
+              <div class="halt-name">Saturated</div>
+              <div class="halt-meter"><span id="bar-sat"></span></div>
+              <div class="halt-detail mono dim" id="det-sat">0 / 3 consecutive below threshold</div>
+            </div>
+            <div class="halt" data-kind="quality">
+              <div class="halt-name">Quality halt</div>
+              <div class="halt-meter"><span id="bar-qual"></span></div>
+              <div class="halt-detail mono dim" id="det-qual">verifier ≥ floor</div>
+            </div>
+            <div class="halt" data-kind="budget">
+              <div class="halt-name">Budget halt</div>
+              <div class="halt-meter"><span id="bar-budget"></span></div>
+              <div class="halt-detail mono dim" id="det-budget">spend ≤ cap</div>
+            </div>
+            <div class="halt" data-kind="notsat">
+              <div class="halt-name">Not saturated</div>
+              <div class="halt-meter"><span id="bar-notsat"></span></div>
+              <div class="halt-detail mono dim" id="det-notsat">sessions remaining</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-side">
+        <div class="card phase-card">
+          <div class="phase-steps" id="phaseSteps">
+            <span data-phase="fetching">Fetch</span>
+            <span data-phase="extracting">Extract</span>
+            <span data-phase="comparing">Score</span>
+            <span data-phase="verifying">Verify</span>
+            <span data-phase="complete">Decide</span>
+          </div>
+          <div class="totals" id="totals"></div>
+        </div>
+
+        <div class="card themes-card">
+          <h3>Theme repository <span class="mono dim" id="themeCount"></span></h3>
+          <ul id="themes" class="themes"></ul>
+        </div>
+
+        <div class="card log-card">
+          <h3>MCP tool calls <span class="mono dim" id="logCount"></span></h3>
+          <ul id="log" class="log"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Report ────────────────────────────────────────────────────────── -->
+  <section id="report" class="hidden">
+    <div class="verdict-banner" id="verdictBanner"></div>
+    <div class="report-grid">
+      <aside class="card outcome" id="outcome"></aside>
+      <div class="findings" id="findings"></div>
+    </div>
+    <div class="approvals" id="approvals"></div>
+    <button id="newRun" class="btn">New run</button>
+  </section>
+</main>
+
+<aside id="inspector" class="inspector hidden">
+  <div class="insp-head">
+    <h3 id="inspTitle"></h3>
+    <button id="inspClose" aria-label="close">✕</button>
+  </div>
+  <div id="inspBody"></div>
+</aside>
+<div id="scrim" class="hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

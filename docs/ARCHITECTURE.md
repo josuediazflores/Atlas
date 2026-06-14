@@ -110,10 +110,22 @@ connects to the server over an in-memory transport for deterministic, no-
 subprocess runs; the same server also runs standalone over stdio (`npm run mcp`)
 for any external MCP client.
 
+## Live dashboard (`src/server.ts` + `web/`)
+
+The dashboard consumes the **same `RunEvent` stream** the CLI renders. A small
+Node HTTP server serves the static front-end and exposes `/api/run`, which runs
+the loop and forwards each event over Server-Sent Events — pacing them into a
+watchable cadence (the engine stays pure; pacing lives in the server). The
+vanilla-JS front-end renders the run-setup, the live view (animated novelty-vs-
+threshold chart, four-way halt tracker, phase indicator, running totals, theme
+repository, MCP tool-call log), a click-through iteration inspector (transcript
+excerpt + themes + embedding match + verifier verdict), and the final report —
+all in the Atlas dark-renaissance language, for one cohesive look across tool and
+site. `/api/transcript` backs the inspector and, like the MCP boundary, returns
+transcript lines only.
+
 ## Deferred
 
-- **Live-run dashboard** — the engine already emits the full event stream the
-  dashboard needs (phases, tool calls, novelty, verifier, halt-condition
-  tracker, pending approvals). When built it reuses the Atlas dark-renaissance
-  visual language for one cohesive look across tool and site.
-- **Live Claude run mode** — see the seam table in the README.
+- **Live Claude run mode** — see the seam table in the README. Everything else
+  the original spec called for (mock MCP, loop, CLI, dashboard, marketing site)
+  is built.

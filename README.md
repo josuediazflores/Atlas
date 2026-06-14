@@ -76,6 +76,21 @@ and the novelty curve crossing the threshold — the moment saturation is called
 
 It writes a grounded, citable findings report to `out/` as JSON and Markdown.
 
+### Live dashboard
+
+```bash
+npm run dashboard     # → http://localhost:4317
+```
+
+The same run, in the browser, in the Atlas dark-renaissance look: the novelty
+curve draws point by point and crosses the threshold live, alongside a phase
+indicator, a four-way halt-condition tracker, the growing theme repository, the
+MCP tool-call log, and a click-through iteration inspector (transcript excerpt,
+extracted themes, embedding match, verifier verdict). It streams the *same*
+`RunEvent` stream the CLI renders — the server (`src/server.ts`) just paces it
+into a watchable cadence over Server-Sent Events. Deep-link a run with
+`/?run=1&pace=1100`.
+
 ### Other commands
 
 ```bash
@@ -177,6 +192,8 @@ src/
   engine/                    types, extract, novelty, verify, decide, budget, approval, runLoop
   report/                    grounded findings report (Markdown + JSON)
   cli.ts                     streaming CLI — phases, tool log, money-shot chart, verdict
+  server.ts                  dashboard server — drives the loop, streams events (SSE)
+web/                         live-run dashboard (vanilla JS, Atlas dark-renaissance)
 fixtures/studies/pricing-study/   14-session demo study (saturates at s9)
 site/                        the Atlas marketing page (Claude Design handoff)
 scripts/                     fixture generator + dev harnesses
