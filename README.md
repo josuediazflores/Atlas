@@ -2,6 +2,8 @@
 
 **An agent loop that knows when research is done.**
 
+**New here?** Start with the [**walkthrough**](docs/PRESENTATION.md) — a presentation-style tour of what Atlas is, how to read the dials, and how to run it.
+
 Atlas runs an autonomous research-synthesis loop over interview sessions fetched
 through [Great Question's](https://greatquestion.co) MCP server. It reads each
 transcript as it lands, measures how much is genuinely new, and tells the team
