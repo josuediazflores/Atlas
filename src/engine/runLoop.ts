@@ -27,6 +27,7 @@ import {
 import { DeterministicExtractor, type Extractor } from './extract.js';
 import { DeterministicVerifier, type Verifier } from './verify.js';
 import { McpTranscriptProvider } from '../providers/McpTranscriptProvider.js';
+import { GreatQuestionMcpProvider } from '../providers/GreatQuestionMcpProvider.js';
 import type { TranscriptProvider } from '../providers/TranscriptProvider.js';
 import { buildReport, type ThemeAccumulation } from '../report/buildReport.js';
 
@@ -37,9 +38,19 @@ export interface EngineDeps {
   embedder: EmbeddingProvider;
 }
 
+/**
+ * Choose the transcript source from config. `ATLAS_MCP_URL` set → connect to a
+ * real MCP server (Great Question) over OAuth; unset → the bundled offline mock.
+ * The loop is identical either way — that's the whole point of the interface.
+ */
+function defaultProvider(): TranscriptProvider {
+  const url = process.env.ATLAS_MCP_URL;
+  return url ? new GreatQuestionMcpProvider(url) : new McpTranscriptProvider();
+}
+
 function defaultDeps(): EngineDeps {
   return {
-    provider: new McpTranscriptProvider(),
+    provider: defaultProvider(),
     extractor: new DeterministicExtractor(),
     verifier: new DeterministicVerifier(),
     embedder: new LocalLexicalEmbeddings(),

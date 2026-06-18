@@ -1,61 +1,65 @@
-# Swapping in the real Great Question MCP
+# The real Great Question MCP integration
 
 The engine depends only on the `TranscriptProvider` interface
-(`TranscriptProvider.ts`). Today the default implementation
-(`McpTranscriptProvider.ts`) connects an MCP client to the bundled mock server
-over an in-memory transport. Pointing at Great Question's real server is a
-change to **how the client connects** — the loop above it does not change.
+(`TranscriptProvider.ts`). The bundled mock (`McpTranscriptProvider.ts`) serves
+fixtures over an in-memory transport; `GreatQuestionMcpProvider.ts` connects the
+same client to Great Question's hosted MCP over OAuth. **Which one runs is a
+single config switch — the loop above it is identical either way.**
 
-## The real server
+## Switching
 
-- **Endpoint:** `https://greatquestion.co/api/mcp/v1` (Streamable HTTP transport)
-- **Auth:** OAuth 2.1 with PKCE — browser-based, no API keys to manage
-- **Access:** gated. Requires an active Great Question account with MCP access
-  enabled (enterprise early-access by request). The advertised
-  `npx @greatquestion/mcp-server` package does **not** exist — do not wire it up.
-- **Surface:** ~80 tools across the research workflow, read and write. Atlas's
-  loop needs only three reads: `search_studies`, `list_repo_sessions`,
-  `get_transcript`. The mock exposes exactly these (plus `get_study`).
+```bash
+# Real server (interactive browser OAuth on first run; tokens cached in ~/.atlas)
+ATLAS_MCP_URL=https://greatquestion.co/api/mcp/v1 npm run demo -- --study <real-study-id>
 
-## What changes
+# One-shot proof: authorize, list studies, fetch one real transcript
+npm run connect:gq                 # or: npm run connect:gq -- <study-id>
 
-1. **Transport.** Replace the in-memory pair in `McpTranscriptProvider.connect()`
-   with the SDK's Streamable-HTTP client transport pointed at the endpoint:
+# Unset ATLAS_MCP_URL → the offline mock (default; the deterministic demo)
+npm run demo
+```
 
-   ```ts
-   import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-   const transport = new StreamableHTTPClientTransport(
-     new URL('https://greatquestion.co/api/mcp/v1'),
-     { authProvider /* OAuth 2.1 / PKCE */ },
-   );
-   await client.connect(transport);
-   ```
+`defaultProvider()` in `runLoop.ts`: `ATLAS_MCP_URL` set → real, unset → mock.
 
-   (Confirm the exact transport export and OAuth provider hook against the
-   installed `@modelcontextprotocol/sdk` version before wiring.)
+## The real server (verified live)
 
-2. **Auth.** Implement the OAuth 2.1/PKCE flow with the SDK's auth provider
-   helper. Tokens are obtained interactively in the browser; the engine never
-   handles a static key.
+- **Endpoint:** `https://greatquestion.co/api/mcp/v1` (Streamable HTTP).
+- **Auth:** OAuth 2.1 + PKCE. The server returns RFC 9728 protected-resource
+  metadata and supports **dynamic client registration** (RFC 7591) at
+  `…/api/mcp/v1/oauth/register`, so there is no API key or client secret — the
+  client registers itself and the user authorizes in the browser. Scopes:
+  `mcp:tools mcp:resources mcp:prompts`; Atlas needs only reads.
+- **Tools:** ~80 across the research workflow. Atlas calls three reads:
+  `search_studies` → `list_repo_sessions` → `get_repo_session_transcript`
+  (falls back to `get_transcript`). The provider introspects `tools/list` on
+  connect and resolves the real tool names + parameter keys, so it adapts if the
+  surface shifts.
 
-3. **Response shape.** The mock returns `structuredContent` shaped as
-   `{ transcript: { sessionId, studyId, participant, durationSec, lines } }`. Map
-   the real `get_transcript` response into the `Transcript` type in
-   `getTranscript()`. The real payload is richer; take the fields the loop uses.
+## How it works (`GreatQuestionMcpProvider` + `oauth.ts`)
 
-4. **Nothing else.** `runLoop.ts`, novelty, verify, decide, budget, approval,
-   and the report are all provider-agnostic.
+1. **Transport + auth.** `connectWithOAuth()` builds a
+   `StreamableHTTPClientTransport` with a file-backed `OAuthClientProvider`. On
+   the first 401 the SDK discovers metadata, registers the client, and opens the
+   browser; a loopback server on `:8123` (`ATLAS_OAUTH_PORT`) catches the code,
+   `transport.finishAuth(code)` exchanges it, and we reconnect. Tokens persist
+   to `~/.atlas/oauth-<host>.json` (mode 0600), so later runs are silent.
+2. **Tool resolution.** `tools/list` on connect; bind the three reads above.
+3. **Response mapping.** Real payloads are richer than the mock's, so
+   `toTranscript()` maps defensively into the `Transcript` type (line numbers,
+   timestamps, speakers, participant) with fallbacks. `ATLAS_DEBUG=1` logs the
+   live tool list and raw transcript keys to refine the mapping against real data.
 
 ## Writes stay gated
 
-Atlas's loop only *reads* through the provider. The one write it contemplates —
+Atlas only *reads* through the provider. The one write it contemplates —
 pausing recruiting on a saturated study — is recorded as a `PendingApproval` and
-never executed here. Against the real server that would be a separate, explicit
-call to a Great Question write tool (e.g. a study-update tool), made only after a
-human approves the pending action. Keep that human gate when you wire writes.
+never executed. Against the real server that would be a separate, explicit call
+to a write tool, made only after a human approves. Keep that gate when wiring writes.
 
-## Suggested shape
+## Still a demo seam: extraction
 
-Add a `GreatQuestionMcpProvider implements TranscriptProvider` alongside the mock
-provider and select it via config (e.g. `ATLAS_MCP_URL` set → real provider,
-unset → mock). The interface guarantees the loop is identical either way.
+The data layer is real, but `DeterministicExtractor` reads gold themes from the
+local fixtures (keyed by study/session id) and will throw on real ids. A full
+saturation run over **real** transcripts needs the documented live extractor
+(`ClaudeExtractor`, claude-opus-4-8) — a different model from the verifier. The
+`DeterministicVerifier` is model-free and already works on real transcript text.

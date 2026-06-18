@@ -12,6 +12,7 @@
   },
   "scripts": {
     "mcp": "tsx src/mcp/server.ts",
+    "connect:gq": "tsx src/connect.ts",
     "dashboard": "tsx src/server.ts",
     "demo": "tsx src/cli.ts run --study pricing-study",
     "run": "tsx src/cli.ts",
