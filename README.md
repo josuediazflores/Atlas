@@ -97,6 +97,7 @@ into a watchable cadence over Server-Sent Events. Deep-link a run with
 
 ```bash
 npm run mcp           # run the mock Great Question MCP server standalone (stdio)
+npm run connect:gq    # connect to the REAL Great Question MCP over OAuth (lists studies, fetches a transcript)
 npm test              # the test suite (4 verdicts, novelty math, full-run scenarios)
 npm run typecheck     # tsc --noEmit
 npx tsx scripts/genFixtures.ts   # regenerate the demo study fixtures
@@ -164,24 +165,40 @@ swap-in point marked in the source:
 | Extract (`src/engine/extract.ts`) | `DeterministicExtractor` | `claude-opus-4-8`, structured output, adaptive thinking |
 | Verify (`src/engine/verify.ts`) | `DeterministicVerifier` | `claude-sonnet-4-6` (asserted ≠ worker) |
 | Embeddings (`src/engine/novelty.ts`) | `LocalLexicalEmbeddings` | Voyage (Anthropic has no native embeddings API) |
-| Transcripts (`src/providers/`) | mock MCP server | real Great Question MCP (see below) |
+| Transcripts (`src/providers/`) | mock MCP server (default) | **real Great Question MCP — already built** (OAuth 2.1/PKCE), see below |
 
 The budget meter even *estimates* what a live run would spend (opus + sonnet
 token costs), so the cap stays meaningful in demo mode.
 
 ---
 
-## The mock MCP server (and swapping in Great Question)
+## Great Question MCP: mock by default, real integration built in
 
-Great Question's real MCP (`https://greatquestion.co/api/mcp/v1`, OAuth 2.1/PKCE,
-gated early-access) isn't open to this account yet — and the advertised
-`npx @greatquestion/mcp-server` package doesn't exist. So `src/mcp/server.ts` is
-a **mock that speaks the real Model Context Protocol** and exposes Great
-Question's real read tools, backed by local fixtures.
+The demo is backed by `src/mcp/server.ts` — a **mock that speaks the real Model
+Context Protocol** and exposes Great Question's real read tools, served from
+local fixtures. The engine talks to it as a plain MCP **client**, so the
+transcript source is a config switch, not a rewrite.
 
-The engine talks to it as a plain MCP **client**, so pointing at the real server
-later is a transport/URL/auth change above an unchanged loop. See
-[`src/providers/greatquestion.md`](src/providers/greatquestion.md) for the swap.
+That switch is real, and so is the other side of it. `GreatQuestionMcpProvider`
+connects Atlas to Great Question's hosted server
+(`https://greatquestion.co/api/mcp/v1`) over Streamable HTTP with **OAuth 2.1 /
+PKCE and dynamic client registration — no API key**. Set `ATLAS_MCP_URL` and the
+same loop runs against live research data:
+
+```bash
+npm run connect:gq    # authorize in the browser, list studies, fetch one transcript
+ATLAS_MCP_URL=https://greatquestion.co/api/mcp/v1 npm run demo -- --study <id>
+```
+
+This was verified against the live server: the OAuth challenge, dynamic client
+registration, and Great Question's consent screen (rendering Atlas's client name
+and MCP scopes) all work. The one remaining gate is **account-side** — the
+workspace must have *MCP OAuth* enabled — so live tool calls wait on that flag;
+the moment it flips, `connect:gq` runs against real data with zero code changes.
+The provider introspects the live `tools/list` on connect, maps real transcript
+payloads into Atlas's types, and is **read-only** (the one contemplated write —
+pausing recruiting — stays a `PendingApproval`). Full mechanics in
+[`src/providers/greatquestion.md`](src/providers/greatquestion.md).
 
 ---
 
@@ -190,10 +207,11 @@ later is a transport/URL/auth change above an unchanged loop. See
 ```
 src/
   mcp/server.ts              mock Great Question MCP server (stdio + in-process)
-  providers/                 TranscriptProvider + MCP-client implementation
+  providers/                 TranscriptProvider — mock client + real GQ client (oauth.ts, OAuth 2.1/PKCE)
   engine/                    types, extract, novelty, verify, decide, budget, approval, runLoop
   report/                    grounded findings report (Markdown + JSON)
   cli.ts                     streaming CLI — phases, tool log, money-shot chart, verdict
+  connect.ts                 npm run connect:gq — prove the real MCP data path end to end
   server.ts                  dashboard server — drives the loop, streams events (SSE)
 web/                         live-run dashboard (vanilla JS, Atlas dark-renaissance)
 fixtures/studies/pricing-study/   14-session demo study (saturates at s9)
